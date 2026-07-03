@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 - 2026-07-03
+
+- **INV-QUALITY-1 — durable implementation** (rules-only release): new kernel invariant — every change must hold across the code's *declared operating envelope* (platforms, harnesses, input classes, callers, derived from repo evidence: docs, CI matrix, public APIs, tests, existing callers), not merely the case that triggered the work; fix causes, not symptoms; tests assert the contract, not the authoring machine's incidental representation. Woven into the execution loop (pre-coding envelope evidence, durability check, completion checklist), delegation prompt rules, and the dispatch spec-writing rule.
+- **Codex surface — Editing**: a small patch is a *diff-size* discipline, not a *design-horizon* one; the minimal diff that fixes the cause across the envelope is right, the smaller diff that silences today's symptom on today's machine is not.
+
 ## 0.2.0 - 2026-07-03
 
 - **Concat installer**: Codex loads only the single `$CODEX_HOME/AGENTS.md`, so `make install` / `install.sh` now concatenate the manual + all rule files into it (`---` separators); `$CODEX_HOME/rules/` holds reference copies. A pre-existing unmanaged `AGENTS.md` is backed up to `.bak-<timestamp>` first.
