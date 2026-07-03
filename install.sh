@@ -3,8 +3,12 @@ set -e
 
 REPO="${REPO:-saltyming/codex-agent-kit}"
 BRANCH="${BRANCH:-main}"
+SLATE_REPO="${SLATE_REPO:-saltyming/slate-agent-kit}"
+SLATE_BRANCH="${SLATE_BRANCH:-main}"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+SKIP_MCP="${SKIP_MCP:-0}"
+BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
 
 AGENTS_FILE="$CODEX_HOME/AGENTS.md"
 RULES_DIR="$CODEX_HOME/rules"
@@ -12,6 +16,7 @@ SKILLS_DIR="$CODEX_HOME/skills"
 MANIFEST="$CODEX_HOME/.codex-agent-kit-manifest"
 
 RULE_FILES="
+codex-agent-kit--codex-surface.md
 codex-agent-kit--task-execution.md
 codex-agent-kit--palette.md
 codex-agent-kit--delegation.md
@@ -42,32 +47,61 @@ fetch() {
     fi
 }
 
+prompt_tty() {
+    label="$1"
+    default="$2"
+    answer=""
+    if [ -z "${SKIP_PROMPT:-}" ] && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+        printf "%s [%s]: " "$label" "$default" >/dev/tty 2>&1 || true
+        read -r answer </dev/tty 2>/dev/null || true
+    fi
+    [ -n "$answer" ] || answer="$default"
+    printf '%s' "$answer"
+}
+
 uninstall() {
+    if command -v codex >/dev/null 2>&1; then
+        CODEX_HOME="$CODEX_HOME" codex mcp remove aside >/dev/null 2>&1 || true
+        CODEX_HOME="$CODEX_HOME" codex mcp remove dispatch >/dev/null 2>&1 || true
+    fi
     if [ ! -f "$MANIFEST" ]; then
-        echo "No manifest at $MANIFEST. Nothing to uninstall."
+        echo "No manifest at $MANIFEST. MCP registrations removed if Codex was available."
         exit 0
     fi
+    # Signature-guarded: only kit-signed files are removed; user-owned
+    # (-custom: signed, e.g. prefs) and unrecognized files are preserved.
     while IFS= read -r f; do
         case "$f" in "## "*) continue ;; esac
         if [ -d "$f" ]; then
-            rm -rf "$f"
-            echo "  removed $f"
+            if head -5 "$f/SKILL.md" 2>/dev/null | grep -q 'slate-agent-kit:common\|codex-agent-kit'; then
+                rm -rf "$f"
+                echo "  removed $f"
+            else
+                echo "  kept (unrecognized signature): $f"
+            fi
         elif [ -f "$f" ]; then
-            rm -f "$f"
-            echo "  removed $f"
+            if head -1 "$f" | grep -q -- '-custom:'; then
+                echo "  kept (user-owned): $f"
+            elif head -1 "$f" | grep -q 'slate-agent-kit:common\|codex-agent-kit'; then
+                rm -f "$f"
+                echo "  removed $f"
+            else
+                echo "  kept (unrecognized signature): $f"
+            fi
         fi
     done < "$MANIFEST"
     rm -f "$MANIFEST"
-    echo "Uninstalled."
+    echo "Uninstalled codex-agent-kit."
     exit 0
 }
 
 for arg in "$@"; do
     case "$arg" in
         --uninstall) uninstall ;;
+        --skip-mcp) SKIP_MCP=1 ;;
         -h|--help)
-            echo "Usage: $0 [--uninstall]"
-            echo "Env: CODEX_HOME, REPO, BRANCH"
+            echo "Usage: $0 [--uninstall] [--skip-mcp]"
+            echo "Env: CODEX_HOME, REPO, BRANCH, SLATE_AGENT_KIT_DIR, SKIP_MCP, BIN_DIR, CUSTOM_RULES_DIR, SKIP_PROMPT"
             exit 0
             ;;
     esac
@@ -75,20 +109,67 @@ done
 
 echo "Installing codex-agent-kit..."
 echo "  CODEX_HOME: $CODEX_HOME"
+echo "  AGENTS.md:  $AGENTS_FILE (manual + rules concatenated)"
+echo "  Skills:     $SKILLS_DIR/palette-*"
+
+CUSTOM_RULES_DIR="${CUSTOM_RULES_DIR:-}"
+if [ -z "$CUSTOM_RULES_DIR" ] && [ -z "${SKIP_PROMPT:-}" ]; then
+    echo ""
+    echo "Optional: append additional *.md rule files into AGENTS.md"
+    echo "(press Enter to skip)"
+    CUSTOM_RULES_DIR="$(prompt_tty "Path to a directory of custom rule files" "")"
+fi
 
 mkdir -p "$CODEX_HOME" "$RULES_DIR" "$SKILLS_DIR"
 echo "## install @ $(date -u +%FT%TZ 2>/dev/null || date)" > "$MANIFEST"
 
-fetch "$RAW_BASE/AGENTS.md" "$AGENTS_FILE"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
+
+if [ -f "$AGENTS_FILE" ] && ! head -1 "$AGENTS_FILE" | grep -Fq '<!-- slate-agent-kit:common -->'; then
+    bak="$AGENTS_FILE.bak-$(date -u +%Y%m%dT%H%M%SZ)"
+    cp -p "$AGENTS_FILE" "$bak"
+    echo "WARNING: existing $AGENTS_FILE is not managed by this kit; backed up to $bak"
+    echo "## backup: $bak" >> "$MANIFEST"
+fi
+
+: > "$AGENTS_FILE"
+first=1
+fetch "$RAW_BASE/AGENTS.md" "$tmp_dir/AGENTS.md"
+for f in AGENTS.md $RULE_FILES; do
+    if [ "$first" -eq 0 ]; then
+        printf '\n---\n\n' >> "$AGENTS_FILE"
+    fi
+    first=0
+    if [ "$f" = "AGENTS.md" ]; then
+        cat "$tmp_dir/AGENTS.md" >> "$AGENTS_FILE"
+    else
+        src="$tmp_dir/$f"
+        fetch "$RAW_BASE/codex-rules/$f" "$src"
+        cat "$src" >> "$AGENTS_FILE"
+        dest="$RULES_DIR/$f"
+        cp "$src" "$dest"
+        echo "$dest" >> "$MANIFEST"
+        echo "  rule: $dest"
+    fi
+done
+printf '\n' >> "$AGENTS_FILE"
 echo "$AGENTS_FILE" >> "$MANIFEST"
 echo "  wrote $AGENTS_FILE"
 
-for f in $RULE_FILES; do
-    dest="$RULES_DIR/$f"
-    fetch "$RAW_BASE/codex-rules/$f" "$dest"
-    echo "$dest" >> "$MANIFEST"
-    echo "  rule: $dest"
-done
+if [ -n "$CUSTOM_RULES_DIR" ] && [ -d "$CUSTOM_RULES_DIR" ]; then
+    echo "Appending custom rules from $CUSTOM_RULES_DIR..."
+    for src in "$CUSTOM_RULES_DIR"/*.md; do
+        [ -f "$src" ] || continue
+        {
+            echo ""
+            echo "---"
+            echo ""
+            cat "$src"
+        } >> "$AGENTS_FILE"
+        echo "  custom: $(basename "$src")"
+    done
+fi
 
 for s in $SKILL_NAMES; do
     dest="$SKILLS_DIR/$s"
@@ -98,6 +179,53 @@ for s in $SKILL_NAMES; do
     echo "$dest" >> "$MANIFEST"
     echo "  skill: $dest"
 done
+
+# Preference files (aside/dispatch) — generated next to the rules, read on
+# demand; user-owned after generation (custom signature, uninstall keeps them).
+prefs_dir="$tmp_dir/scripts"
+mkdir -p "$prefs_dir"
+fetch "$RAW_BASE/scripts/configure-prefs.sh" "$prefs_dir/configure-prefs.sh"
+fetch "$RAW_BASE/scripts/codex-agent-kit--aside-prefs.md.tmpl" "$prefs_dir/codex-agent-kit--aside-prefs.md.tmpl"
+fetch "$RAW_BASE/scripts/codex-agent-kit--dispatch-prefs.md.tmpl" "$prefs_dir/codex-agent-kit--dispatch-prefs.md.tmpl"
+if [ -n "${SKIP_PROMPT:-}" ]; then
+    PREFS_PROMPT=no
+    export PREFS_PROMPT
+fi
+RULES_DIR="$RULES_DIR" MANIFEST="$MANIFEST" PREFIX="codex-agent-kit" sh "$prefs_dir/configure-prefs.sh"
+
+find_slate_dir() {
+    if [ -n "${SLATE_AGENT_KIT_DIR:-}" ] && [ -x "$SLATE_AGENT_KIT_DIR/tooling/install-mcp.sh" ]; then
+        printf '%s' "$SLATE_AGENT_KIT_DIR"
+        return 0
+    fi
+    for candidate in "../slate-agent-kit" "../.."; do
+        if [ -x "$candidate/tooling/install-mcp.sh" ]; then
+            (CDPATH= cd -- "$candidate" && pwd)
+            return 0
+        fi
+    done
+    return 1
+}
+
+install_mcp() {
+    [ "$SKIP_MCP" != "1" ] || {
+        echo "Skipping MCP registration because SKIP_MCP=1."
+        return 0
+    }
+    if slate_dir="$(find_slate_dir 2>/dev/null)"; then
+        BIN_DIR="$BIN_DIR" CODEX_HOME="$CODEX_HOME" "$slate_dir/tooling/install-mcp.sh" --configure-codex
+        return 0
+    fi
+    command -v git >/dev/null 2>&1 || {
+        echo "Error: git is required to fetch slate-agent-kit for MCP registration. Re-run with SKIP_MCP=1 to install rules only." >&2
+        exit 1
+    }
+    slate_tmp="$tmp_dir/slate-agent-kit"
+    git clone --depth=1 --branch "$SLATE_BRANCH" "https://github.com/$SLATE_REPO.git" "$slate_tmp"
+    BIN_DIR="$BIN_DIR" CODEX_HOME="$CODEX_HOME" "$slate_tmp/tooling/install-mcp.sh" --configure-codex
+}
+
+install_mcp
 
 echo ""
 echo "Installed codex-agent-kit."
