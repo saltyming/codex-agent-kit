@@ -92,7 +92,7 @@ uninstall: ## Remove kit-signed files installed by make install and unregister M
 	@while IFS= read -r f; do \
 		case "$$f" in "## "*) continue ;; esac; \
 		if [ -d "$$f" ]; then \
-			if head -5 "$$f/SKILL.md" 2>/dev/null | grep -q 'slate-agent-kit:common\|$(CUSTOM_SIGNATURE)'; then \
+			if head -8 "$$f/SKILL.md" 2>/dev/null | grep -Eq '<!-- (slate-agent-kit:common|$(CUSTOM_SIGNATURE)) -->'; then \
 				rm -rf "$$f" && echo "  removed $$f"; \
 			else \
 				echo "  kept (unrecognized signature): $$f"; \
@@ -100,7 +100,7 @@ uninstall: ## Remove kit-signed files installed by make install and unregister M
 		elif [ -f "$$f" ]; then \
 			if head -1 "$$f" | grep -q -- '-custom:'; then \
 				echo "  kept (user-owned): $$f"; \
-			elif head -1 "$$f" | grep -q 'slate-agent-kit:common\|$(CUSTOM_SIGNATURE)'; then \
+			elif head -1 "$$f" | grep -Eq '<!-- (slate-agent-kit:common|$(CUSTOM_SIGNATURE)) -->'; then \
 				rm -f "$$f" && echo "  removed $$f"; \
 			else \
 				echo "  kept (unrecognized signature): $$f"; \

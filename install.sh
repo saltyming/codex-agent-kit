@@ -73,7 +73,7 @@ uninstall() {
     while IFS= read -r f; do
         case "$f" in "## "*) continue ;; esac
         if [ -d "$f" ]; then
-            if head -5 "$f/SKILL.md" 2>/dev/null | grep -q 'slate-agent-kit:common\|codex-agent-kit'; then
+            if head -8 "$f/SKILL.md" 2>/dev/null | grep -Eq '<!-- (slate-agent-kit:common|codex-agent-kit) -->'; then
                 rm -rf "$f"
                 echo "  removed $f"
             else
@@ -82,7 +82,7 @@ uninstall() {
         elif [ -f "$f" ]; then
             if head -1 "$f" | grep -q -- '-custom:'; then
                 echo "  kept (user-owned): $f"
-            elif head -1 "$f" | grep -q 'slate-agent-kit:common\|codex-agent-kit'; then
+            elif head -1 "$f" | grep -Eq '<!-- (slate-agent-kit:common|codex-agent-kit) -->'; then
                 rm -f "$f"
                 echo "  removed $f"
             else
