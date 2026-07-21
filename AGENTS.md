@@ -1,8 +1,8 @@
 <!-- slate-agent-kit:common -->
 # Codex Agent Operating Manual
 
-**Version**: 0.5.0
-**Last Updated**: 2026-07-17
+**Version**: 0.6.0
+**Last Updated**: 2026-07-22
 
 > Operating rules for Codex agents. This kernel defines the
 > **invariants** (each stated exactly once, with a stable ID) and names the
@@ -156,7 +156,7 @@ User Request
 │  ├─ Read-only (research, design sketch)? → use the harness read-only delegate freely
 │  └─ Write-capable? → GATE-DELEGATE: surface/propose → agree, then select by dependency structure:
 │     ├─ Independent mechanical step with clear acceptance → dispatch_submit (external backend)
-│     │     → poll dispatch_status / dispatch_wait / dispatch_logs / dispatch_steer
+│     │     → poll dispatch_status / dispatch_logs / dispatch_steer
 │     │     (dispatch-prefs execution policy; proactive+auto → submit directly)
 │     └─ Coordinated or judgment-heavy work → stay in-session; Codex has no native
 │           write-capable subagent surface — do not simulate one with shell tricks
