@@ -123,6 +123,7 @@ validate: ## Sanity-check generated files and Codex-specific surface
 	test -f scripts/codex-agent-kit--aside-prefs.md.tmpl || { echo "missing aside prefs template"; fail=1; }; \
 	test -f scripts/codex-agent-kit--dispatch-prefs.md.tmpl || { echo "missing dispatch prefs template"; fail=1; }; \
 	test -f scripts/codex-agent-kit--git-prefs.md.tmpl || { echo "missing git prefs template"; fail=1; }; \
+	test -f scripts/codex-agent-kit--comment-prefs.md.tmpl || { echo "missing comment prefs template"; fail=1; }; \
 	grep -R -n "apply_patch" codex-rules/codex-agent-kit--codex-surface.md >/dev/null || { echo "missing Codex apply_patch rule"; fail=1; }; \
 	grep -R -n "codex mcp add" codex-rules/codex-agent-kit--codex-surface.md README.md install.sh >/dev/null || { echo "missing Codex MCP install documentation"; fail=1; }; \
 	! grep -R -n "workslate\\|CLAUDE.md\\|claude-rules" AGENTS.md codex-rules codex-skills >/dev/null || { echo "stale Claude-specific terms found"; fail=1; }; \

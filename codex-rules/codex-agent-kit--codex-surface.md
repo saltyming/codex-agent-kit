@@ -14,9 +14,11 @@ differs in Codex: how the rules load, goals, editing, and the Slate MCP servers.
   does not auto-load `$CODEX_HOME/rules/*.md`; that directory is reference
   material.
 - The preference files (`codex-agent-kit--aside-prefs.md`, `codex-agent-kit--dispatch-prefs.md`,
-  `codex-agent-kit--git-prefs.md`) live in `$CODEX_HOME/rules/` and are read on demand:
-  before an aside or dispatch call, and before the first commit or PR of a
-  session. They are not part of the concat, so the user can edit them without
+  `codex-agent-kit--git-prefs.md`, `codex-agent-kit--comment-prefs.md`) live in `$CODEX_HOME/rules/` and
+  are read on demand: before an aside or dispatch call, before the first commit
+  or PR of a session, and before the first file, comment, doc comment, or
+  header you write in a session, including in a file you are only editing.
+  They are not part of the concat, so the user can edit them without
   reinstalling.
 - Skills live under `$CODEX_HOME/skills`. Read a selected skill's `SKILL.md`
   completely before acting on it.

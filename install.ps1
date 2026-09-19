@@ -167,11 +167,11 @@ Write-Host ""
 Write-Host "Installed codex-agent-kit."
 Write-Host "Manifest: $Manifest"
 Write-Host ""
-# ── aside/dispatch preferences (the shared configure-prefs.ps1) ──
+# ── aside, dispatch, git, comment preferences (the shared configure-prefs.ps1) ──
 $prefsTmp = Join-Path $env:TEMP ("codex-prefs-" + [System.Guid]::NewGuid())
 New-Item -ItemType Directory -Force -Path $prefsTmp | Out-Null
 Invoke-WebRequest -Uri "$RawBase/scripts/configure-prefs.ps1" -OutFile (Join-Path $prefsTmp "configure-prefs.ps1")
-foreach ($t in @("aside", "dispatch", "git")) {
+foreach ($t in @("aside", "dispatch", "git", "comment")) {
     Invoke-WebRequest -Uri "$RawBase/scripts/codex-agent-kit--$t-prefs.md.tmpl" -OutFile (Join-Path $prefsTmp "codex-agent-kit--$t-prefs.md.tmpl")
 }
 & (Join-Path $prefsTmp "configure-prefs.ps1") -RulesDir $RulesDir -Prefix "codex-agent-kit" -Manifest $Manifest

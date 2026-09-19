@@ -54,6 +54,10 @@ Asynchronous **hierarchical delegation** — hand an execution step to an extern
 
 Requires a backend CLI: [codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai/docs/cli/), and/or [Claude Code](https://claude.com/claude-code). `dispatch_backends` reports which are installed.
 
+### Git and comment preferences
+
+`configure-prefs.sh` also installs two user-owned files and asks for their values. `codex-agent-kit--git-prefs.md` holds commit signing, model attribution, commit message format, PR body format, and branch naming; a value left `unset` is asked for by the agent before the first commit or PR that needs it. `codex-agent-kit--comment-prefs.md` holds the file header, comment language, and doc comment preferences; every value defaults to `repository`, so a repository's own convention decides and the file settles only what the repository leaves open. A reconfigure edits both files in place and keeps recorded repository overrides and notes.
+
 ## Installation
 
 **macOS / Linux**
@@ -91,7 +95,7 @@ make uninstall    # remove kit-signed files (user-owned prefs kept)
 - `SKIP_MCP=1` — install rules/skills only; skip MCP build + registration.
 - `SLATE_AGENT_KIT_DIR` — explicit slate checkout for MCP registration.
 - `DISPATCH_ROOTS` — workspace roots for dispatch containment.
-- `ASIDE_*` / `DISPATCH_*` — non-interactive prefs values.
+- `ASIDE_*` / `DISPATCH_*` / `GIT_*` / `COMMENT_*` — non-interactive prefs values.
 
 ## Relationship To Slate
 
