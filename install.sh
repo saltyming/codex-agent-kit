@@ -187,6 +187,7 @@ mkdir -p "$prefs_dir"
 fetch "$RAW_BASE/scripts/configure-prefs.sh" "$prefs_dir/configure-prefs.sh"
 fetch "$RAW_BASE/scripts/codex-agent-kit--aside-prefs.md.tmpl" "$prefs_dir/codex-agent-kit--aside-prefs.md.tmpl"
 fetch "$RAW_BASE/scripts/codex-agent-kit--dispatch-prefs.md.tmpl" "$prefs_dir/codex-agent-kit--dispatch-prefs.md.tmpl"
+fetch "$RAW_BASE/scripts/codex-agent-kit--git-prefs.md.tmpl" "$prefs_dir/codex-agent-kit--git-prefs.md.tmpl"
 if [ -n "${SKIP_PROMPT:-}" ]; then
     PREFS_PROMPT=no
     export PREFS_PROMPT

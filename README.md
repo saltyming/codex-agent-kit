@@ -20,7 +20,7 @@ Codex auto-loads a single user-scope `$CODEX_HOME/AGENTS.md`, so the installer *
 | **State safety** (`INV-STATE-*`) | No model-initiated rollback; "undo" reverses this session's edits, not repo state; user-owned uncommitted changes are inviolate. |
 | **Delegation gates** (`GATE-DELEGATE` / `GATE-DISPATCH`) | Write-capable delegation is surfaced and approved before it runs. |
 
-These bind to Codex via `codex-rules/codex-agent-kit--codex-surface.md`: multi-step work is tracked with **`update_plan` + the goal surface** (Codex's planning tools, in place of Claude's workslate); edits go through **`apply_patch`**; search uses **`tool_search`**; parallel reads use **`multi_tool_use.parallel`**. Detailed rules live in `codex-rules/` (task execution, delegation, palette, git workflow, framework conventions, aside, dispatch) and are folded into the one `AGENTS.md`.
+These bind to Codex via `codex-rules/codex-agent-kit--codex-surface.md`: goals are created only on request; edits go through **`apply_patch`**; write-capable delegation goes through **`dispatch`**. Detailed rules live in `codex-rules/` (task execution, delegation, palette, git workflow, framework conventions, aside, dispatch) and are folded into the one `AGENTS.md`.
 
 ### palette — product-intent outer loop (rules + skills, no server)
 
