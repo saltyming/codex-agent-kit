@@ -1,7 +1,7 @@
 kit = "codex-agent-kit"
 harness = "codex"
-version = "0.10.1"
-slate_version = "0.9.1"
+version = "0.11.0"
+slate_version = "0.10.0"
 primary = "AGENTS.md"
 load = "concat"
 rules = [ "codex-agent-kit--codex-surface.md", "codex-agent-kit--task-execution.md", "codex-agent-kit--palette.md", "codex-agent-kit--delegation.md", "codex-agent-kit--git-workflow.md", "codex-agent-kit--aside.md", "codex-agent-kit--dispatch.md" ]
