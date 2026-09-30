@@ -1,62 +1,139 @@
 # codex-agent-kit
 
-A battle-tested operating manual (`AGENTS.md`) for the **OpenAI Codex CLI**, plus the two **shared** Slate MCP servers — `aside` (cross-family second opinions) and `dispatch` (asynchronous hierarchical delegation to codex / opencode / claude backends) — whose source lives in [`slate-agent-kit`](https://github.com/saltyming/slate-agent-kit)`/shared/mcp-servers` and is built + registered from there. It also ships **palette** — a rules-plus-skills *product-intent outer loop* that wraps the per-task workflow with a durable, cross-session backlog and a slice → build → review cadence (opt in per project via the `palette-init` skill).
+An operating manual and rule set for the OpenAI Codex CLI (`AGENTS.md` plus rule files), the palette document system with its skills, and three shared MCP servers: `aside` (second opinions from another model family), `dispatch` (asynchronous execution by a codex, opencode or claude backend) and `palette` (reads, checks and writes palette documents). One installer, `slate-setup`, installs all of it, writes your preferences and sets Codex's subagent default model.
 
-Its rules render from the **same shared source** as the Claude and Kimi kits, then bind to Codex's native surfaces (planning, editing, delegation). To change shared behavior, edit `slate-agent-kit/shared` and re-render — never hand-summarize here.
-
-> **Honest caveat.** These rules reduce common failure modes but don't eliminate them — treat the kit as a strong prior, not a guarantee. The pattern that still recurs and needs manual correction is **silent scope reduction** (splitting or deferring requested work despite the invariants). Review completion reports critically and name the miss when you see it.
+This is codex-agent-kit 0.8.0. Its rules, skills, templates and prefs templates are rendered from [`slate-agent-kit`](https://github.com/saltyming/slate-agent-kit), which also builds the servers and the installer; its release v0.7.0 provides the binaries. The Claude and Kimi kits are rendered from the same source and differ only where the harness does.
 
 ## What's Inside
 
-### AGENTS.md — the operating manual
+### Manual and rules
 
-Codex auto-loads a single user-scope `$CODEX_HOME/AGENTS.md`, so the installer **concatenates** the invariant kernel + every rule file (with `---` separators) into it. The kernel states each rule once with a stable ID, then references the ID everywhere else:
+`AGENTS.md` states each invariant once under a stable ID, grouped by who decides. The rule files hold the procedures and refer to the IDs.
 
-| Invariant | What it enforces |
+| Section | Invariants | What it says |
+|---|---|---|
+| **Direction**: you decide | `INV-DIR-1`, `INV-DIR-2`, `INV-SCOPE-1`, `INV-AUTH-1` | You set scope, priority, trade-offs and what counts as done; the agent does not expand or shrink the scope or swap in an approach it prefers. You decide whether a turn is for discussion or for execution, and a next action written in a document is a proposal. The whole approved scope is delivered, with no stubs or "follow-up PR" splits. Only your approval authorizes work; documents advise. |
+| **Autonomy**: the agent decides | `INV-AUTO-1`, `INV-AUTO-2`, `INV-QUALITY-1`, `INV-DELEG-1`, `INV-DELEG-2` | Under your direction the agent picks method, order and tools, and judges whether consulting, dispatching or delegating is worth its cost. No rule makes any of them mandatory on a condition alone. Changes are written for every platform and caller the code claims to support, and fix the cause. One writer per file; delegates inherit every invariant. |
+| **Prohibitions**: never without an explicit request | `INV-STATE-1`, `INV-STATE-2`, `INV-STATE-3` | No rollback on the agent's own initiative; "undo" reverses this session's edits, not repository state; your uncommitted changes are left alone. Destructive git runs only when you name the command (`GATE-GIT`). |
+| **Reporting** | `INV-VERIFY-1`, `INV-VERIFY-2`, `INV-COMM-1`, `INV-COMM-2`, `INV-CTX-1` | Verify before claiming completion; report failures as failures. Formal register; plain wording without stock metaphors, filler intensifiers or flattery openers. Context usage is not a reason to stop. |
+| **Memory** | `INV-MEM-1` | Native memory holds only what has no other home (see `memory-triage` below). |
+
+Codex loads only `$CODEX_HOME/AGENTS.md`, so the installer writes that file as the manual followed by every rule file and your custom rules, each separated by a `---` line. The copies in `$CODEX_HOME/rules/` are reference material. The rule files:
+
+- `codex-agent-kit--codex-surface.md`: what differs in Codex (see below).
+- `codex-agent-kit--task-execution.md`: the execution loop (understand, plan, execute) and the gates `GATE-SCOPE-CONFIRM`, `GATE-DEVIATION` and `GATE-GIT`.
+- `codex-agent-kit--palette.md`: the palette document system.
+- `codex-agent-kit--delegation.md`: subagents and the other ways work leaves the session, with the Codex delegation surfaces.
+- `codex-agent-kit--git-workflow.md`: how your git preferences are read, asked for and recorded.
+- `codex-agent-kit--framework-conventions.md`: React / Next.js, Rust and Python conventions.
+- `codex-agent-kit--aside.md` and `codex-agent-kit--dispatch.md`: when consultation and dispatch are worth using.
+
+The manual and rule files come to about 46 KB; skills and prefs are outside `AGENTS.md` and load only when used.
+
+**Codex surface.** Goals are created only when you or the system asked for one, and marked `complete` only when no required work remains. Manual file edits use `apply_patch`, not shell heredocs or write scripts. A small patch is a discipline about diff size, not about design horizon: the minimal diff that fixes the cause across the code's supported environments is right. `request_user_input` works in Plan mode only; in Default mode the agent makes reasonable assumptions and asks a short plain question only when the answer is not findable locally and a wrong assumption would be costly.
+
+### Action levels
+
+Consultation (aside), dispatch and subagents spend your models, quota and time, so each has one level in its prefs file. Without a prefs file the level is `suggest`.
+
+| Level | The agent |
 |---|---|
-| **Scope integrity** (`INV-SCOPE-*`) | Ship the entire requested scope; no silent stubs, TODOs, or "A now, B later" splits; scope is user-owned — never unilaterally expanded or shrunk. |
-| **Verification** (`INV-VERIFY-*`) | Run the test / execute the code before claiming completion; report failures faithfully, never fake a green result. |
-| **Durable implementation** (`INV-QUALITY-1`) | Write for the declared operating envelope (every platform, input class, and caller the code claims to support); fix causes, not symptoms. |
-| **State safety** (`INV-STATE-*`) | No model-initiated rollback; "undo" reverses this session's edits, not repo state; user-owned uncommitted changes are inviolate. |
-| **Delegation gates** (`GATE-DELEGATE` / `GATE-DISPATCH`) | Write-capable delegation is surfaced and approved before it runs. |
+| `on-request` | Uses the surface only when you ask. |
+| `suggest` (default) | Proposes it in one line (what, where, how many, which model) and waits. |
+| `auto` | Judges the value, uses it, and states in one line how many, which model and why. |
 
-These bind to Codex via `codex-rules/codex-agent-kit--codex-surface.md`: goals are created only on request; edits go through **`apply_patch`**; write-capable delegation goes through **`dispatch`**. Detailed rules live in `codex-rules/` (task execution, delegation, palette, git workflow, framework conventions, aside, dispatch) and are folded into the one `AGENTS.md`.
+At every level the agent applies the same test first: could the result change a decision that is not yet made, is the user already doing that job, and is the cost in models, count, quota and time proportionate to what it can change. A current-turn instruction ("use dispatch", "no aside") outranks the level. A default model in the prefs applies unless you name another for the turn.
 
-### palette — product-intent outer loop (rules + skills, no server)
+### palette
 
-A durable, cross-session planning layer that wraps the per-task workflow. Where the rest of the kit is *within-task* (understand → plan → execute, then it evaporates), palette adds the *outer* loop: a backlog of product intent → slice a thin phase with you → hand a story's acceptance criteria to the normal build workflow → review and re-plan on completion.
+palette is a project's document system. It is on only in a project that contains `_palette/`; `palette-init` creates it. In a project without `_palette/` the agent leaves palette alone, apart from one line offering it for work that spans several increments.
 
-- **Opt-in per project, then always-on.** The `palette-init` skill scaffolds a `_palette/` directory; its mere presence turns palette on. No `_palette/`, no palette.
-- **Advisory, never authoritative.** The backlog / phase / story artifacts *propose* scope; your existing approval gate *authorizes*. A two-way scope firewall keeps palette from shrinking requested work or deferring unmet acceptance criteria.
-- **RST artifacts, robust subset**, plus four **pull-only** skills (`palette-spec` / `palette-ux` / `palette-ui` / `palette-rules`) for tech-spec / UX / design / project-rules depth on demand.
+| Family | Holds |
+|---|---|
+| backlog | Every work item and its status (`proposed`, `approved`, `in-phase-<N>`, `done`, `dropped`); the index of phases and deliverables. Status lives nowhere else. |
+| phase | Goal, reason, assumptions and exit criteria of the active increment. |
+| deliverable | One approved unit of the phase and its `Done when`. |
+| state | Decisions not yet written into a record, questions that block the active phase, discrepancies between sources; one line each. |
+| RFC / ADR | A decision, why it was made, and the evidence it relies on. |
+| changeset / staging | Accepted edits to maintained documents that the source does not implement yet; staging is generated from them. |
+| design / spec / principles / glossary | The maintained description of the system as the source implements it. |
 
-`_palette/` is a personal planning record — **not committed** by default. Methodology inspired by [mano](https://github.com/ceceppa/mano) (MIT © 2026 ceceppa).
+- **Layout.** `_palette/layout.rst` places each family either `internal` (`_palette/`, your personal record, git-ignored and never committed) or at a project path (committed with the change it describes). You choose the placement in `palette-init`.
+- **Documents advise, approval authorizes.** Where a document lives decides who sees it, not what it authorizes. palette never shrinks or defers approved scope; a narrower phase needs your approval and the naming of what moves to the backlog.
+- **No development-stage records.** No document keeps progress narrative (what ran when, which model, which batch) or instructions to a later session; version control and session transcripts hold that history. An earlier session's view is a dated `Proposal`.
+- **State is updated in place**, when a decision is made or a fact is verified, so a session that ends at any point leaves the documents true.
+- **Resume.** A new session reads state within a budget, reports the lint result, where things stand, the open questions and a proposal, then waits for your direction.
+- **Closing a phase** marks each item `done` with an outcome pointer or `dropped`, adds new problems as proposed items with your consent, and deletes the phase's files.
+- Documents are reStructuredText in a small house-style subset. The templates ship with the kit (`$CODEX_HOME/skills/palette-init/templates/`) and through the palette server.
 
-### aside MCP server
+| Skill | Use |
+|---|---|
+| `palette-init` | Set up palette in a project (intake, placement of each family, seeded backlog), or move an earlier palette project. |
+| `palette-resume` | Pick up a project at the start of a session. |
+| `palette-state` | Keep backlog, phase, deliverable and state current: decisions, questions, discrepancies, item status, opening and closing a phase. |
+| `palette-record` | Write an RFC or ADR with its evidence, maintain its changeset, promote the edits when the implementation lands. |
+| `palette-spec`, `palette-ux`, `palette-ui`, `palette-rules` | Pull-only: run only when you ask. Technical contracts and choices; screens and navigation; visual language; the project's own conventions. |
 
-Second opinions via locally-installed CLIs. Codex has no built-in advisor, so `aside` is the second-opinion surface — a perspective from a different model family or a local CLI: `aside_codex` (OpenAI), `aside_copilot` (GitHub), `aside_claude` (Anthropic).
+The backlog, phase and deliverable cadence is inspired by [mano](https://github.com/ceceppa/mano) (MIT © 2026 ceceppa).
 
-- **Transcript auto-forwarded, redacted** — `text` passes through verbatim; `tool_use` / `tool_result` / `thinking` become placeholders. 100 KB cap; pass `include_transcript=false` for decontextualised questions.
-- **Read-only, non-interactive** — each backend can read files and grep the workspace itself, but cannot edit files or run shells.
-- **Preference-driven policy** — `configure-prefs.sh` generates `codex-agent-kit--aside-prefs.md` (preferred backend, default models, reasoning effort, and a `conservative` / `preference-only` / `proactive` auto-call policy) with an interactive overwrite prompt and injection-safe substitution.
-- **Cost-aware** — every call uses your third-party API quota, so the rules cap it to one focused question per call.
+### memory-triage and the memory invariant
 
-Install the CLIs separately (`aside` only wraps them): [codex](https://github.com/openai/codex), [copilot](https://docs.github.com/copilot/how-tos/copilot-cli), and [Claude Code](https://claude.com/claude-code). `aside_list` reports which are present.
+`INV-MEM-1` puts native memory last: a fact goes to the code, a maintained document, a rule file or palette first. A correction that only concerns the current task is applied and not stored; a correction that is a rule is proposed to you as text for the project's instruction file or for this kit.
 
-### dispatch MCP server
+Codex Memories are generated in the background from past sessions under `~/.codex/memories/`, not written by the agent, so the invariant applies when you ask the agent to remember something and to any memory file it writes. The `memory-triage` skill reviews memory and proposes, memory by memory, whether to keep, promote, revise, merge or delete it (or that it is already covered by a rule), each with a reason. For Codex Memories it proposes changes through Codex's own memory controls, since the agent does not edit them. It changes nothing until you choose.
 
-Asynchronous **hierarchical delegation** — hand an execution step to an external coding agent (codex, opencode, or claude) running headless and **write-capable**. Where `aside` seeks a read-only opinion, `dispatch` entrusts execution; the run continues in the background and you poll for the result.
+### Subagents on Codex
 
-- **Async submit → poll → cancel** — `dispatch_submit` returns a task id immediately and runs the backend detached; `dispatch_status` / `dispatch_list` track it, `dispatch_logs` shows the curated timeline, `dispatch_cancel` stops a run or a whole `plan_id`.
-- **Watch + steer** — `dispatch_logs` shows a curated live timeline; `dispatch_steer` interrupts and resumes the *same* backend session with a new instruction, preserving context + files it already wrote.
-- **Server-enforced guards** — `working_dir` must canonicalize within the project tree (widen with `DISPATCH_EXTRA_ROOTS`); `danger-full-access` is blocked unless `DISPATCH_ALLOW_DANGER=1`; one active run per directory.
-- **Execution policy + approval gate** — `configure-prefs.sh` generates `codex-agent-kit--dispatch-prefs.md` with a `conservative` / `preference-only` / `proactive` policy plus an approval mode; `ask` confirms working_dir + step scope before the first submit, `auto` pre-authorizes within server guards.
+Codex's native subagents (`spawn_agent` and the tools that steer a spawned agent) are all write-capable: a spawned agent has the parent's tools, whatever its `agent_type`. Codex has no read-only subagent, so a read-only opinion goes through aside. A spawned agent can start subagents of its own; the prompt says whether it may, and nested spawns stay within the count and files stated. Subagents run on the default model set in the subagent prefs (`[agents] default_subagent_model`), or on the session's model when none is set. The agent does not simulate delegation with background shells or nested `codex exec` calls. The subagent level in the prefs decides whether the agent starts subagents on its own, proposes them, or waits for you.
 
-Requires a backend CLI: [codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai/docs/cli/), and/or [Claude Code](https://claude.com/claude-code). `dispatch_backends` reports which are installed.
+### aside: consultation
 
-### Git and comment preferences
+Asks another model family for a read-only opinion through a locally installed CLI. Codex has no built-in advisor, so aside is the second-opinion surface: `aside_codex` (OpenAI), `aside_copilot` (GitHub) and `aside_claude` (Anthropic); `aside_list` reports which are installed.
 
-`configure-prefs.sh` also installs two user-owned files and asks for their values. `codex-agent-kit--git-prefs.md` holds commit signing, model attribution, commit message format, PR body format, and branch naming; a value left `unset` is asked for by the agent before the first commit or PR that needs it. `codex-agent-kit--comment-prefs.md` holds the file header, comment language, and doc comment preferences; every value defaults to `repository`, so a repository's own convention decides and the file settles only what the repository leaves open. A reconfigure edits both files in place and keeps recorded repository overrides and notes.
+- **Transcript auto-forwarded, redacted.** `text` passes through verbatim; `tool_use`, `tool_result` and `thinking` become placeholders. 100 KB cap; `include_transcript=false` for decontextualised questions.
+- **Read-only, non-interactive.** Each backend can read files and grep the workspace itself but cannot edit files or run shells.
+- **Level and settings.** `codex-agent-kit--aside-prefs.md` holds the level, the backend, and the model, reasoning effort and model fallback chain for that backend. A transient failure retries the same question on the next model in the chain, as one logical call. A current-turn instruction that names a backend ("ask codex", "no aside") outranks the level.
+- **When it pays.** A decision that is still open: an architecture or public-contract choice other code will build on, concurrency or invariants, security-sensitive code, a diagnosis the evidence does not settle. Not while you are reviewing with the agent and waiting for its own answer, when the decision is made, or for a routine question. Every call spends third-party quota, so it is one focused question per call.
+
+### dispatch: external execution
+
+Hands a self-contained, write-capable execution step to a coding agent (codex, opencode or claude) that runs headless in the background. Where aside asks for an opinion, dispatch entrusts work.
+
+- **Async submit, poll, cancel.** `dispatch_submit` returns a task id immediately and runs the backend detached (`codex exec`, or a short-lived local `opencode serve`); `dispatch_status` and `dispatch_list` track it; `dispatch_cancel` stops a run, or a whole `plan_id`, by killing its process group; `dispatch_backends` reports which backends are installed.
+- **Watch and steer.** `dispatch_logs` shows a curated live timeline (codex rollout logs or dispatch-owned OpenCode event JSONL, noise filtered, paged by line range). `dispatch_steer` interrupts a run and resumes the same backend session with a new instruction, keeping its context and the files it already wrote, as a linked follow-up task.
+- **Structured task spec.** Objective, target files, constraints and acceptance, plus free context, rendered deterministically into the backend prompt and stored for audit.
+- **Persistent state.** A SQLite `dispatch.db`; statuses `queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`. At start, tasks stranded by a dead server are marked `interrupted` without touching a peer session's live runs.
+- **Server-enforced guards.** The working directory must resolve inside the project root or a root you gave with `--roots`; the `danger-full-access` sandbox is blocked unless the server is started with `DISPATCH_ALLOW_DANGER=1`; one active run per directory unless `allow_concurrent`. Codex uses its CLI sandbox; OpenCode uses its permission rules plus dispatch's directory guard, not an OS sandbox. Rejections return a structured `{error:{code,message}}`.
+- **Level and settings.** `codex-agent-kit--dispatch-prefs.md` holds the level, backend, model, reasoning effort and model fallback chain. Dispatch fits isolated mechanical edits, long verify-and-fix loops, large well-scoped sweeps and independent plan steps with clear target files and acceptance criteria. It does not fit an open product question, edits that overlap your own uncommitted changes, work that needs close interactive judgment, or anything that cannot be written as one self-contained spec.
+- **No completion notification.** The agent checks a run later in the turn; when a turn ends with a run unfinished, it tells you the run is still going and that you need to ask it to check back.
+
+### palette server
+
+Reads, checks and writes the palette documents of one project, so structure and cross-file consistency are kept by code. It embeds the document templates and derives its checks from them.
+
+- **Read tools** (read-only annotation): `palette_status`, `palette_lint`, `palette_layout`, `palette_template`.
+- **Write tools**: `palette_init`, `palette_layout_set`, `palette_backlog_add`, `palette_backlog_update`, `palette_phase_open`, `palette_deliverable_create`, `palette_deliverable_update`, `palette_phase_close`, `palette_state_record`, `palette_state_resolve`, `palette_record_create`, `palette_record_update`, `palette_changeset_edit`, `palette_changeset_promote`. Each takes an optional `dry_run` and returns the diff. Each changes every affected file or none: it writes temporary files and renames them into place, regenerates the indexes and staging it affects, lints what it touched, and refuses a result that would contain an error. It changes only the lines its operation concerns; a file it cannot parse is reported and never rewritten. Write tools stay under Codex's approval settings.
+- **Lint** (`P001` to `P014`) checks the RST subset, structure, identity, links, relations, changesets, generated files, status placement, development-stage wording, size budgets, layout, backlog consistency and the fields only the server writes.
+- **Project scope.** Every tool takes the project's absolute path, accepted only inside the server's project root or a root you gave with `--roots`. If a dispatch or palette tool reports `no_project_root`, Codex started the server outside your project: run the configure step and give the workspace root when it asks.
+- **Command line**: `palette check <project>` prints the findings and exits 1 on an error, for CI.
+
+Without the server, the agent edits by hand from the templates, and the next resume's lint reports what drifted.
+
+### Preferences
+
+Five user-owned files in `$CODEX_HOME/rules/`. They are not part of the combined `AGENTS.md`, so you can edit them without reinstalling; the agent reads each the first time a session needs it (before consulting, dispatching or starting a subagent, before the first commit or PR, and before writing a file, comment or header).
+
+| File | Sets | Installed default |
+|---|---|---|
+| `codex-agent-kit--aside-prefs.md` | Level; backend (`codex`, `copilot`, `claude`); model, reasoning effort and model fallback for the chosen backend | `suggest`, `codex` |
+| `codex-agent-kit--dispatch-prefs.md` | Level; backend (`codex`, `opencode`, `claude`); model; reasoning effort; model fallback | `suggest`, `codex` |
+| `codex-agent-kit--subagent-prefs.md` | Level; default model; reasoning effort | `suggest`, harness default |
+| `codex-agent-kit--git-prefs.md` | Commit signing, model attribution, commit message format, PR body format, branch naming | `unset`: the agent asks at first need and records the answer |
+| `codex-agent-kit--comment-prefs.md` | File headers, comment language, doc comments | `repository`: the repository's own convention decides |
+
+Each file starts with a `codex-agent-kit-custom:` signature, so upgrade and uninstall keep it. A setting is a `##` heading followed by one bold value line; the installer changes only that value line and leaves your notes and any "Repository overrides" lines alone. You can edit a value by hand at any time. When a repository's own convention differs from a git or comment value, the agent asks which to follow there and records the answer.
+
+The subagent default model and effort are also written to Codex's own configuration, in `config.toml` under `[agents]` as `default_subagent_model` and `default_subagent_reasoning_effort` (`low`, `medium`, `high`, `xhigh`, `max` or `ultra`), only when set and after validation. If you edit them in the prefs file by hand, run the configure step again.
 
 ## Installation
 
@@ -64,42 +141,119 @@ Requires a backend CLI: [codex](https://github.com/openai/codex), [OpenCode](htt
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/saltyming/codex-agent-kit/main/install.sh | sh
-# uninstall (removes only kit-signed files; your prefs are kept):
-curl -fsSL https://raw.githubusercontent.com/saltyming/codex-agent-kit/main/install.sh | sh -s -- --uninstall
+# other commands and options go after "sh -s --":
+curl -fsSL https://raw.githubusercontent.com/saltyming/codex-agent-kit/main/install.sh | sh -s -- configure
+curl -fsSL https://raw.githubusercontent.com/saltyming/codex-agent-kit/main/install.sh | sh -s -- uninstall
 ```
 
-**Windows (PowerShell)** — registers the shared MCP servers natively (downloads the prebuilt `.zip` binaries + `codex mcp add`) and generates prefs:
+**Windows (PowerShell)**
 
 ```powershell
 irm https://raw.githubusercontent.com/saltyming/codex-agent-kit/main/install.ps1 | iex
+# to pass a command or options, download the script and run it:
+irm https://raw.githubusercontent.com/saltyming/codex-agent-kit/main/install.ps1 -OutFile install.ps1
+.\install.ps1 configure
 ```
 
-**From a clone:**
+The PowerShell script also accepts the earlier installers' switches: `-Uninstall`, `-SkipMcp` and `-DispatchRoots <paths>`.
+
+The entry point downloads the prebuilt `slate-setup` for your platform from slate release v0.7.0, verifies its checksum, and runs it on the kit's payload. `slate-setup` performs every step, with the same code on Linux, macOS and Windows.
+
+| Command | Does |
+|---|---|
+| `install` (default) | Full install or reinstall. |
+| `configure` | Prefs, custom rules, native configuration and server registration only. |
+| `uninstall` | Reverses what install recorded. `--uninstall` still works. |
+
+| Option | Meaning |
+|---|---|
+| `--binaries prebuilt\|build\|skip` | `prebuilt` (default) downloads `aside`, `dispatch` and `palette` from the slate release, checked against `checksums.txt` (if release v0.7.0 does not exist it uses the latest and says so). `build` runs `cargo build --release` in `--slate-dir` and needs Rust. `skip` installs no binaries and registers no servers. `--skip-mcp` still works. |
+| `--slate-dir <dir>` | The slate checkout to build from. |
+| `--roots <paths>` | Workspace roots dispatch and palette may work in, as an OS path list. When it is not given, the `DISPATCH_ROOTS` environment variable is used. |
+| `--set <key>=<value>` | Pre-answers a prefs question; repeatable. Keys are `<file>.<key>`, for example `aside.level=auto` or `git.signing=no-gpg-sign`. |
+| `--custom-rules <dir\|none>` | A folder of your own `*.md` rule files to install (or `none`). |
+| `--yes` | Takes the current or default value for every question. |
+| `--dry-run` | Prints the summary and exits. |
+| `--home <dir>` | Codex home. Default: `$CODEX_HOME`, else `~/.codex`. |
+| `--bin-dir <dir>` | Binary folder. Default: `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows). |
+| `--ref <ref>` | `install.sh` only: the branch or tag of this repository to fetch for the one-line command. Default: `main`. |
+
+### What a run does
+
+Every run has the same shape: detect, ask, summarize and confirm, apply, report. Nothing changes before you confirm.
+
+1. **Detect** the Codex home, the installed kit version, your prefs files, the `codex` command and leftovers of earlier installers.
+2. **Ask**: binaries mode, workspace roots, each prefs file, and an optional folder of custom rules. Every answer is validated against the allowed values and asked again if it is invalid. Only relevant questions are asked (a backend's model and effort only for the backend you chose). An existing prefs file is kept unless you choose to reconfigure it. Prompts read from the terminal even when the script is piped; without a terminal, or with `--yes`, every question takes its current or default value.
+3. **Summarize and confirm**: every file to write or back up, every registration, and every configuration key with its old and new value.
+4. **Apply**: cleanup of leftovers from earlier installers (see Upgrading), binaries, `AGENTS.md` with the rules and skills, prefs files and custom rules, server registration (`codex mcp add`), and the `config.toml` edits.
+5. **Report** the installed paths and that Codex needs a restart.
+
+What it writes: `AGENTS.md`, reference copies of the rules in `rules/`, `skills/`, `aside`, `dispatch` and `palette` in the binary folder, and a manifest, `.codex-agent-kit-manifest.toml`, listing every file, backup, configuration key with its previous value, and registration. Kit-managed Markdown files start with `<!-- slate-agent-kit:common -->` or `<!-- codex-agent-kit -->`. An existing `AGENTS.md` that is not kit-managed is copied to `AGENTS.md.bak-<UTC timestamp>` first. Each `*.md` in a custom rules folder is copied into `rules/` as `codex-agent-kit--<name>.md`, signed as yours, and appears once in the combined `AGENTS.md`, which is regenerated from scratch on every install and configure; a file that would replace a kit-managed one is refused.
+
+Codex configuration edited in `config.toml` (every other key, comment and format is kept, and each previous value is recorded for uninstall):
+
+- `[mcp_servers.aside]`: `tool_timeout_sec = 1800` and `default_tools_approval_mode = "approve"`. Without this and the next entry, an aside call on Codex fails.
+- `[features.code_mode]`: `mcp__aside` is added to `excluded_tool_namespaces` and `direct_only_tool_namespaces`. A scalar `code_mode` key under `[features]` is reported and the edit is refused.
+- `[agents]`: the subagent model and effort, when set.
+
+### Upgrading
+
+Run the same install command over an earlier release (0.7.x). Beyond the files:
+
+- **Prefs are migrated** after you confirm each file (without a terminal they are migrated). The old file is copied to `<file>.bak-<UTC timestamp>`; the new file starts from the current template, takes every value that has a new setting, and keeps your `Notes` and `Repository overrides` sections as they were.
+
+  | Earlier value | Now |
+  |---|---|
+  | aside `Auto-call policy`: `conservative`, `preference-only` | Level `on-request` |
+  | aside `Auto-call policy`: `proactive` | Level `auto` |
+  | aside `Preferred third-party advisor` | Backend (`none` becomes `codex` with level `on-request`) |
+  | dispatch policy `conservative`, `preference-only` | Level `on-request` |
+  | dispatch `proactive` with approval mode `ask` | Level `suggest` |
+  | dispatch `proactive` with approval mode `auto` | Level `auto` |
+  | dispatch `Default granularity` | Dropped |
+  | git and comment values | Carried over unchanged |
+  | subagent prefs | New; created from the template |
+
+- **Binaries and registrations** that earlier installers left in other places are removed, including the binaries the earlier Windows installer put in `%CODEX_HOME%\slate-agent-kit\bin` (removed after the new registration succeeds).
+- **Earlier scripts and environment seeds** (`configure-prefs`, the `ASIDE_*`, `DISPATCH_*`, `GIT_*` and `COMMENT_*` prefs seeds, `SKIP_MCP`) are replaced by `--set`, `--yes` and `--binaries skip`; `DISPATCH_ROOTS` still works as a default for `--roots`.
+- **An earlier palette project** (phase briefs, `stories/` with an index, `reviews.rst`, a `templates/` folder) is moved by `palette-init`, which proposes the move and applies only what you approve, after a backup of `_palette/` outside the repository: phase briefs become `phase.rst`, each story becomes a deliverable with plain `Done when` outcomes, the status in the story index moves to the backlog, unresolved items in the reviews become proposed backlog items with your consent, and `templates/` is removed because the templates now ship with the kit.
+
+### Uninstall
+
+`uninstall` removes the kit-managed files and folders the manifest lists after checking their signatures. It lists your `-custom:` files (prefs, custom rules) and keeps them unless you choose to remove them. It unregisters the servers. It restores each configuration key it edited to its previous value, or removes the key if it did not exist, only while the current value is still the one the installer wrote; otherwise it reports the key and leaves it. A binary is removed only when no other kit's manifest lists it.
+
+### From a clone
 
 ```sh
-make install      # concatenate AGENTS.md + rules + skills, register MCP, configure prefs
-make configure    # re-run the aside + dispatch preference prompts
-make validate     # sanity-check the rendered kit
-make uninstall    # remove kit-signed files (user-owned prefs kept)
+git clone https://github.com/saltyming/codex-agent-kit && cd codex-agent-kit
+make install      # install from dist/
+make configure    # prefs, custom rules, native configuration, server registration
+make uninstall
+make help
+make install ARGS="--binaries build --slate-dir ../slate-agent-kit"   # options go in ARGS
 ```
 
-**Loading model:** Codex auto-loads only `$CODEX_HOME/AGENTS.md`, so the installer concatenates `AGENTS.md` + every rule (with `---` separators) into it. The copies in `$CODEX_HOME/rules/` are reference material; the prefs files there are read on demand and survive reinstall/uninstall (user-owned signature). A pre-existing unmanaged `AGENTS.md` is backed up to `AGENTS.md.bak-<timestamp>` first.
+### Requirements
 
-`aside` / `dispatch` are not vendored here — they live in `slate-agent-kit/shared/mcp-servers` so every harness uses the same build. On macOS/Linux the installer registers them via `codex mcp add` through slate's `tooling/install-mcp.sh` (a slate checkout is found via `SLATE_AGENT_KIT_DIR` / sibling / parent, or shallow-cloned). On Windows `install.ps1` does it natively.
+- Linux, macOS or Windows. Rust is needed only for `--binaries build`.
+- The `codex` command, which the installer uses to register the servers.
+- The backend CLIs, installed separately (the servers only wrap them): [codex](https://github.com/openai/codex), [copilot](https://docs.github.com/copilot/how-tos/copilot-cli) (GitHub's standalone Copilot CLI, not `gh copilot`), [Claude Code](https://claude.com/claude-code), and [OpenCode](https://opencode.ai/docs/cli/) for dispatch. `aside_list` and `dispatch_backends` report which are present; a missing one is reported as unavailable, not as an error.
 
-**Environment:**
+## Kit Layout
 
-- `CODEX_HOME` — install root, default `~/.codex`.
-- `CUSTOM_RULES_DIR` — optional directory of additional `*.md` rules appended to `AGENTS.md`.
-- `SKIP_PROMPT=1` — suppress interactive prompts (custom rules, prefs).
-- `SKIP_MCP=1` — install rules/skills only; skip MCP build + registration.
-- `SLATE_AGENT_KIT_DIR` — explicit slate checkout for MCP registration.
-- `DISPATCH_ROOTS` — workspace roots for dispatch containment.
-- `ASIDE_*` / `DISPATCH_*` / `GIT_*` / `COMMENT_*` — non-interactive prefs values.
+```
+dist/                  the payload slate-setup installs (rendered; do not edit)
+  kit.toml             descriptor: kit, harness, versions, files, servers
+  AGENTS.md            the manual
+  rules/               rule files, in the order they are combined
+  skills/              palette-* and memory-triage; palette templates in skills/palette-init/templates/
+  prefs/               prefs templates
+install.sh, install.ps1, Makefile   entry points (rendered): fetch slate-setup and run it
+AGENTS.md              instructions for maintaining this repository (not installed)
+README.md, CHANGELOG.md, LICENSE.md   maintained here
+```
 
-## Relationship To Slate
-
-This repo is a harness-specific **rendered** kit. To change shared behavior, edit `slate-agent-kit/shared` and render the Codex adapter; do not hand-summarize rules here.
+This repository is a rendered kit. To change the rules, skills, templates or entry points, edit the sources in slate-agent-kit (`shared/`, `adapters/codex/`, `tooling/kit-scripts/`), render with `tooling/render-kit.sh codex`, and run `tooling/validate.sh`; do not edit `dist/` or summarize rules by hand.
 
 ## License
 
