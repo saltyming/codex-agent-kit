@@ -1,7 +1,7 @@
 <!-- slate-agent-kit:common -->
 # Codex Agent Operating Manual
 
-**Version**: 0.11.2
+**Version**: 0.11.3
 **Last Updated**: 2026-10-08
 
 > Rules for Codex agents, in articles: one norm each, with the test that decides whether it was kept. Articles are cited by number (`§ 6`) and defined once, here; a new one takes the next free number or a letter suffix, and numbers never move. How to use a tool is the harness's and the tool's job.
@@ -11,6 +11,7 @@
 
 - `codex-agent-kit--task-execution.md`: the execution loop, undo, destructive git.
 - `codex-agent-kit--delegation.md`: subagents and the other ways work leaves the session.
+- `codex-agent-kit--models.md`: which model and effort a delegate, a dispatch step or a consultation runs on.
 - `codex-agent-kit--palette.md`: the palette document system, active only where `_palette/` exists.
 - `codex-agent-kit--aside.md`, `codex-agent-kit--dispatch.md`: consulting another model family; handing a step to `dispatch`.
 - `codex-agent-kit--git-workflow.md`: the user's git preferences.

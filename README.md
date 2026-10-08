@@ -25,10 +25,11 @@ Codex loads only `$CODEX_HOME/AGENTS.md`, so the installer writes that file as t
 - `codex-agent-kit--task-execution.md`: the execution loop, undo and destructive git.
 - `codex-agent-kit--palette.md`: the palette document system.
 - `codex-agent-kit--delegation.md`: subagents and the other ways work leaves the session, with the Codex delegation surfaces.
+- `codex-agent-kit--models.md`: which model and effort a delegate, a dispatch step or a consultation runs on, with the Codex models.
 - `codex-agent-kit--git-workflow.md`: how your git preferences are read, asked for and recorded.
 - `codex-agent-kit--aside.md` and `codex-agent-kit--dispatch.md`: when consultation and dispatch are worth using.
 
-The manual and rule files come to about 25 KB; skills and prefs are outside `AGENTS.md` and load only when used.
+The manual and rule files come to about 29 KB; skills and prefs are outside `AGENTS.md` and load only when used.
 
 **Codex surface.** Goals are created only when you or the system asked for one, and marked `complete` only when no required work remains. Manual file edits use `apply_patch`, not shell heredocs or write scripts. A small patch is a discipline about diff size, not about design horizon: the minimal diff that fixes the cause across the code's supported environments is right. `request_user_input` works in Plan mode only; in Default mode the agent makes reasonable assumptions and asks a short plain question only when the answer is not findable locally and a wrong assumption would be costly.
 
