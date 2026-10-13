@@ -1,7 +1,7 @@
-<!-- codex-agent-kit-custom:aside-prefs -->
-# Aside Preferences
+<!-- codex-agent-kit-custom:consult-prefs -->
+# Consultation Preferences
 
-> User-owned (`codex-agent-kit-custom:aside-prefs`): uninstall and upgrade keep it. Set by the configure step or by hand.
+> User-owned (`codex-agent-kit-custom:consult-prefs`): uninstall and upgrade keep it. Set by the configure step or by hand.
 
 ## Level
 
